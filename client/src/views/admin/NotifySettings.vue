@@ -27,23 +27,27 @@ const testTo = ref('');
 const testing = ref(false);
 const testResult = ref(null); // { ok: bool, text }
 
+function applyServerState(data) {
+  form.value.notify_enabled = Boolean(data.enabled);
+  form.value.notify_on_assign = data.onAssign !== false;
+  form.value.notify_on_unassign = data.onUnassign !== false;
+  form.value.notify_on_status = data.onStatus !== false;
+  form.value.notify_on_create = data.onCreate !== false;
+  form.value.notify_on_delete = data.onDelete !== false;
+  form.value.smtp_host = data.smtp_host || '';
+  form.value.smtp_port = data.smtp_port || 465;
+  form.value.smtp_secure = data.smtp_secure || 'ssl';
+  form.value.smtp_user = data.smtp_user || '';
+  form.value.notify_from = data.notify_from || '';
+  passSet.value = Boolean(data.smtp_pass_set);
+}
+
 async function load() {
   loading.value = true;
   error.value = '';
   try {
     const { data } = await api.get('/settings/notifications');
-    form.value.notify_enabled = data.enabled;
-    form.value.notify_on_assign = data.onAssign;
-    form.value.notify_on_unassign = data.onUnassign;
-    form.value.notify_on_status = data.onStatus;
-    form.value.notify_on_create = data.onCreate;
-    form.value.notify_on_delete = data.onDelete;
-    form.value.smtp_host = data.smtp_host;
-    form.value.smtp_port = data.smtp_port;
-    form.value.smtp_secure = data.smtp_secure;
-    form.value.smtp_user = data.smtp_user;
-    form.value.notify_from = data.notify_from;
-    passSet.value = data.smtp_pass_set;
+    applyServerState(data);
   } catch (e) {
     error.value = e.response?.data?.error || 'Ошибка загрузки настроек';
   } finally {
@@ -71,7 +75,9 @@ async function save() {
     };
     if (form.value.smtp_pass) payload.smtp_pass = form.value.smtp_pass;
     const { data } = await api.put('/settings/notifications', payload);
-    passSet.value = data.smtp_pass_set;
+    // Применяем актуальные значения из ответа сервера, чтобы тумблеры
+    // отражали реально сохранённое состояние (без перезагрузки страницы)
+    applyServerState(data);
     form.value.smtp_pass = '';
     success.value = 'Настройки сохранены';
   } catch (e) {
