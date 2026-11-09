@@ -1,6 +1,7 @@
 const express = require('express');
 const { db } = require('../db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { notifyEquipmentCreated, notifyEquipmentDeleted } = require('../notify');
 
 const router = express.Router();
 
@@ -83,6 +84,18 @@ router.post('/', authenticate, (req, res) => {
   `).run(result.lastInsertRowid, finalUserId, status_id, location || null, req.user.id);
 
   const item = db.prepare('SELECT * FROM equipment WHERE id = ?').get(result.lastInsertRowid);
+
+  notifyEquipmentCreated({
+    itemName: item.name,
+    barcode: item.barcode,
+    inventoryNumber: item.inventory_number,
+    statusId: item.status_id,
+    typeId: item.type_id,
+    location: item.location,
+    assignedUserId: item.assigned_user_id,
+    creatorId: req.user.id
+  });
+
   res.status(201).json(item);
 });
 
@@ -121,6 +134,16 @@ router.delete('/:id', authenticate, requireAdmin, (req, res) => {
 
   db.prepare('DELETE FROM movement_history WHERE equipment_id = ?').run(req.params.id);
   db.prepare('DELETE FROM equipment WHERE id = ?').run(req.params.id);
+
+  notifyEquipmentDeleted({
+    itemName: existing.name,
+    barcode: existing.barcode,
+    inventoryNumber: existing.inventory_number,
+    statusId: existing.status_id,
+    assignedUserId: existing.assigned_user_id,
+    deletedById: req.user.id
+  });
+
   res.json({ success: true });
 });
 

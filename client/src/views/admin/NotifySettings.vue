@@ -12,6 +12,8 @@ const form = ref({
   notify_on_assign: true,
   notify_on_unassign: true,
   notify_on_status: true,
+  notify_on_create: true,
+  notify_on_delete: true,
   smtp_host: '',
   smtp_port: 465,
   smtp_secure: 'ssl',
@@ -34,6 +36,8 @@ async function load() {
     form.value.notify_on_assign = data.onAssign;
     form.value.notify_on_unassign = data.onUnassign;
     form.value.notify_on_status = data.onStatus;
+    form.value.notify_on_create = data.onCreate;
+    form.value.notify_on_delete = data.onDelete;
     form.value.smtp_host = data.smtp_host;
     form.value.smtp_port = data.smtp_port;
     form.value.smtp_secure = data.smtp_secure;
@@ -57,6 +61,8 @@ async function save() {
       notify_on_assign: form.value.notify_on_assign,
       notify_on_unassign: form.value.notify_on_unassign,
       notify_on_status: form.value.notify_on_status,
+      notify_on_create: form.value.notify_on_create,
+      notify_on_delete: form.value.notify_on_delete,
       smtp_host: form.value.smtp_host,
       smtp_port: form.value.smtp_port,
       smtp_secure: form.value.smtp_secure,
@@ -137,6 +143,18 @@ onMounted(load);
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="notifyStatus" v-model="form.notify_on_status" :disabled="!form.notify_enabled">
                     <label class="form-check-label small" for="notifyStatus">Смена статуса в рамках сотрудника</label>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="notifyCreate" v-model="form.notify_on_create" :disabled="!form.notify_enabled">
+                    <label class="form-check-label small" for="notifyCreate">Создание новой карточки</label>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="notifyDelete" v-model="form.notify_on_delete" :disabled="!form.notify_enabled">
+                    <label class="form-check-label small" for="notifyDelete">Удаление карточки</label>
                   </div>
                 </div>
               </div>
