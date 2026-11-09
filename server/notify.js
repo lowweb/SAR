@@ -7,6 +7,8 @@ const SETTING_KEYS = [
   'notify_on_assign',
   'notify_on_unassign',
   'notify_on_status',
+  'notify_on_create',
+  'notify_on_delete',
   'smtp_host',
   'smtp_port',
   'smtp_secure',
@@ -23,6 +25,8 @@ function getSettings() {
     onAssign: map.notify_on_assign !== '0',
     onUnassign: map.notify_on_unassign !== '0',
     onStatus: map.notify_on_status !== '0',
+    onCreate: map.notify_on_create !== '0',
+    onDelete: map.notify_on_delete !== '0',
     host: map.smtp_host || '',
     port: Number(map.smtp_port) || 465,
     secureMode: map.smtp_secure || 'ssl',
@@ -126,6 +130,82 @@ function notifyEquipmentMovement(ev) {
   }
 }
 
+// Уведомление о создании новой карточки оборудования.
+// ev: { itemName, barcode, inventoryNumber, statusId, typeId, location, assignedUserId, creatorId }
+// Получатели: администраторы с заполненным email + закреплённый пользователь.
+function notifyEquipmentCreated(ev) {
+  try {
+    const cfg = getSettings();
+    if (!cfg.enabled || !cfg.host || !cfg.onCreate) return;
+
+    const statusName = getStatusName(ev.statusId);
+    const typeName = ev.typeId ? db.prepare('SELECT name FROM equipment_types WHERE id = ?').get(ev.typeId)?.name : null;
+    const creator = getUser(ev.creatorId);
+    const assignee = getUser(ev.assignedUserId);
+
+    const lines = [`Оборудование: ${ev.itemName}`];
+    if (typeName) lines.push(`Тип: ${typeName}`);
+    if (ev.barcode) lines.push(`Штрих-код: ${ev.barcode}`);
+    if (ev.inventoryNumber) lines.push(`Инв. номер: ${ev.inventoryNumber}`);
+    if (statusName) lines.push(`Статус: ${statusName}`);
+    if (ev.location) lines.push(`Расположение: ${ev.location}`);
+    if (assignee) lines.push(`Закреплено за: ${assignee.full_name}`);
+    lines.push(`Кто добавил: ${creator?.full_name || 'система'}`);
+    const body = lines.join('\n');
+
+    const jobs = [];
+    const recipients = new Set();
+    const admins = db.prepare("SELECT email FROM users WHERE role = 'admin' AND email IS NOT NULL AND email != ''").all();
+    admins.forEach(a => recipients.add(a.email));
+    if (assignee?.email) recipients.add(assignee.email);
+
+    for (const to of recipients) {
+      jobs.push(sendMailSafe(cfg, to, `Создана карточка оборудования: ${ev.itemName}`, `В системе создана новая карточка оборудования.\n\n${body}`));
+    }
+
+    if (jobs.length) Promise.allSettled(jobs).catch(() => {});
+  } catch (err) {
+    console.error('[notify] notifyEquipmentCreated:', err.message);
+  }
+}
+
+// Уведомление об удалении карточки оборудования.
+// ev: { itemName, barcode, inventoryNumber, statusId, deletedById }
+// Получатели: администраторы с заполненным email + ранее закреплённый пользователь.
+function notifyEquipmentDeleted(ev) {
+  try {
+    const cfg = getSettings();
+    if (!cfg.enabled || !cfg.host || !cfg.onDelete) return;
+
+    const statusName = getStatusName(ev.statusId);
+    const deleter = getUser(ev.deletedById);
+
+    const lines = [`Оборудование: ${ev.itemName}`];
+    if (ev.barcode) lines.push(`Штрих-код: ${ev.barcode}`);
+    if (ev.inventoryNumber) lines.push(`Инв. номер: ${ev.inventoryNumber}`);
+    if (statusName) lines.push(`Статус на момент удаления: ${statusName}`);
+    lines.push(`Кто удалил: ${deleter?.full_name || 'система'}`);
+    const body = lines.join('\n');
+
+    const jobs = [];
+    const recipients = new Set();
+    const admins = db.prepare("SELECT email FROM users WHERE role = 'admin' AND email IS NOT NULL AND email != ''").all();
+    admins.forEach(a => recipients.add(a.email));
+    if (ev.assignedUserId) {
+      const u = getUser(ev.assignedUserId);
+      if (u?.email) recipients.add(u.email);
+    }
+
+    for (const to of recipients) {
+      jobs.push(sendMailSafe(cfg, to, `Удалена карточка оборудования: ${ev.itemName}`, `В системе удалена карточка оборудования.\n\n${body}`));
+    }
+
+    if (jobs.length) Promise.allSettled(jobs).catch(() => {});
+  } catch (err) {
+    console.error('[notify] notifyEquipmentDeleted:', err.message);
+  }
+}
+
 // Проверка SMTP тестовым письмом (ожидает результат — вызывается из админки)
 async function sendTestEmail(to) {
   const cfg = getSettings();
@@ -140,4 +220,4 @@ async function sendTestEmail(to) {
   return info.messageId;
 }
 
-module.exports = { SETTING_KEYS, getSettings, invalidateTransport, notifyEquipmentMovement, sendTestEmail };
+module.exports = { SETTING_KEYS, getSettings, invalidateTransport, notifyEquipmentMovement, notifyEquipmentCreated, notifyEquipmentDeleted, sendTestEmail };

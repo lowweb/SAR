@@ -4,7 +4,7 @@ const { db } = require('../db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { SETTING_KEYS, getSettings, invalidateTransport, sendTestEmail } = require('../notify');
 
-const BOOL_KEYS = ['notify_enabled', 'notify_on_assign', 'notify_on_unassign', 'notify_on_status'];
+const BOOL_KEYS = ['notify_enabled', 'notify_on_assign', 'notify_on_unassign', 'notify_on_status', 'notify_on_create', 'notify_on_delete'];
 
 function publicSettings() {
   const cfg = getSettings();
@@ -13,6 +13,8 @@ function publicSettings() {
     onAssign: cfg.onAssign,
     onUnassign: cfg.onUnassign,
     onStatus: cfg.onStatus,
+    onCreate: cfg.onCreate,
+    onDelete: cfg.onDelete,
     smtp_host: cfg.host,
     smtp_port: cfg.port,
     smtp_secure: cfg.secureMode,
