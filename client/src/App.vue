@@ -52,8 +52,8 @@ router.afterEach(() => {
       </div>
       <div class="sidebar-user px-3 py-3 border-bottom border-secondary border-opacity-25">
         <div class="small text-secondary">{{ auth.user?.full_name }}</div>
-        <span class="badge" :class="auth.isAdmin ? 'bg-danger' : 'bg-info'">
-          {{ auth.isAdmin ? 'Администратор' : 'Пользователь' }}
+        <span class="badge" :class="auth.isAdmin ? 'bg-danger' : auth.isStaff ? 'bg-warning text-dark' : 'bg-info'">
+          {{ auth.isAdmin ? 'Администратор' : auth.isStaff ? 'Оператор' : 'Пользователь' }}
         </span>
       </div>
       <div class="mt-2">

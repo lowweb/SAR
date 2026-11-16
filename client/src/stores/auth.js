@@ -7,7 +7,10 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || '');
 
   const isAuthenticated = computed(() => !!token.value);
+  // Блок администрирования
   const isAdmin = computed(() => user.value?.role === 'admin');
+  // Работа с остатками: все остатки и любые перемещения (администратор и оператор)
+  const isStaff = computed(() => ['admin', 'operator'].includes(user.value?.role));
 
   async function login(login, password) {
     const { data } = await api.post('/auth/login', { login, password });
@@ -24,5 +27,5 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('user');
   }
 
-  return { user, token, isAuthenticated, isAdmin, login, logout };
+  return { user, token, isAuthenticated, isAdmin, isStaff, login, logout };
 });

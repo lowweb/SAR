@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireStaff, isStaff } = require('../middleware/auth');
 
 // List cartridge movements
 router.get('/', authenticate, (req, res) => {
@@ -26,15 +26,16 @@ router.get('/', authenticate, (req, res) => {
 
   if (cartridge_id) { conditions.push('cm.cartridge_id = ?'); params.push(cartridge_id); }
   if (search) {
-    conditions.push('(c.name LIKE ? OR c.barcode LIKE ? OR cm.comment LIKE ?)');
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    conditions.push('(lower_ci(c.name) LIKE ? OR lower_ci(c.barcode) LIKE ? OR lower_ci(cm.comment) LIKE ?)');
+    const s = `%${search.toLowerCase()}%`;
+    params.push(s, s, s);
   }
   if (user_id) { conditions.push('(cm.from_user_id = ? OR cm.to_user_id = ?)'); params.push(user_id, user_id); }
   if (status_id) { conditions.push('(cm.from_status_id = ? OR cm.to_status_id = ?)'); params.push(status_id, status_id); }
   if (date_from) { conditions.push('cm.moved_at >= ?'); params.push(date_from); }
   if (date_to) { conditions.push('cm.moved_at <= ?'); params.push(date_to); }
 
-  if (req.user.role !== 'admin') {
+  if (!isStaff(req.user)) {
     conditions.push('(cm.from_user_id = ? OR cm.to_user_id = ? OR c.assigned_user_id = ?)');
     params.push(req.user.id, req.user.id, req.user.id);
   }
@@ -57,7 +58,7 @@ router.post('/move', authenticate, (req, res) => {
 
   // Regular users can only move to "Отдали на заправку" status
   // AND only if cartridge is NOT already in "Отдали на заправку"
-  if (req.user.role !== 'admin') {
+  if (!isStaff(req.user)) {
     if (!to_status_id) return res.status(403).json({ error: 'Укажите статус "Отдали на заправку"' });
 
     const refillStatus = db.prepare("SELECT id FROM statuses WHERE name = 'Отдали на заправку' AND scope = 'cartridge'").get();
@@ -122,7 +123,7 @@ router.post('/batch-move', authenticate, (req, res) => {
     const cartridge = db.prepare('SELECT * FROM cartridges WHERE id = ?').get(cid);
     if (!cartridge) return res.status(404).json({ error: `Картридж #${cid} не найден` });
 
-    if (req.user.role !== 'admin') {
+    if (!isStaff(req.user)) {
       if (Number(to_status_id) !== refillStatus.id) {
         return res.status(403).json({ error: 'Пользователи могут перемещать картриджи только в статус "Отдали на заправку"' });
       }
@@ -174,15 +175,15 @@ router.post('/batch-move', authenticate, (req, res) => {
   res.json({ results: batch(), count: cartridge_ids.length });
 });
 
-// Update movement (admin only)
-router.put('/:id', authenticate, requireAdmin, (req, res) => {
+// Update movement (staff only)
+router.put('/:id', authenticate, requireStaff, (req, res) => {
   const { comment } = req.body;
   db.prepare('UPDATE cartridge_movements SET comment=? WHERE id=?').run(comment, req.params.id);
   res.json({ ok: true });
 });
 
-// Delete movement (admin only)
-router.delete('/:id', authenticate, requireAdmin, (req, res) => {
+// Delete movement (staff only)
+router.delete('/:id', authenticate, requireStaff, (req, res) => {
   db.prepare('DELETE FROM cartridge_movements WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });

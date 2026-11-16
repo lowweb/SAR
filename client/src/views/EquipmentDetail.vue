@@ -135,13 +135,13 @@ onMounted(load);
         {{ equip.name }}
       </h1>
       <div class="d-flex gap-2">
-        <button v-if="auth.isAdmin" class="btn btn-outline-primary btn-sm" @click="startEdit">
+        <button v-if="auth.isStaff" class="btn btn-outline-primary btn-sm" @click="startEdit">
           <i class="bi bi-pencil"></i> Редактировать
         </button>
-        <button v-if="auth.isAdmin" class="btn btn-warning btn-sm" @click="showMove = true">
+        <button v-if="auth.isStaff" class="btn btn-warning btn-sm" @click="showMove = true">
           <i class="bi bi-arrow-left-right"></i> Переместить
         </button>
-        <button v-if="auth.isAdmin" class="btn btn-danger btn-sm" @click="deleteEquipment">
+        <button v-if="auth.isStaff" class="btn btn-danger btn-sm" @click="deleteEquipment">
           <i class="bi bi-trash"></i> Удалить
         </button>
       </div>

@@ -2,5 +2,3 @@ node_modules/
 sar.db
 cert.pem
 key.pem
-sar.db-shm
-sar.db-wal

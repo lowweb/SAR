@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireStaff, isStaff } = require('../middleware/auth');
 
 // List cartridges (with filters)
 router.get('/', authenticate, (req, res) => {
@@ -21,16 +21,17 @@ router.get('/', authenticate, (req, res) => {
   const params = [];
 
   if (search) {
-    conditions.push('(c.name LIKE ? OR c.barcode LIKE ? OR c.location LIKE ? OR c.notes LIKE ?)');
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    conditions.push('(lower_ci(c.name) LIKE ? OR lower_ci(c.barcode) LIKE ? OR lower_ci(c.location) LIKE ? OR lower_ci(c.notes) LIKE ?)');
+    const s = `%${search.toLowerCase()}%`;
+    params.push(s, s, s, s);
   }
   if (type_id) { conditions.push('c.type_id = ?'); params.push(type_id); }
   if (status_id) { conditions.push('c.status_id = ?'); params.push(status_id); }
-  if (location) { conditions.push('c.location LIKE ?'); params.push(`%${location}%`); }
+  if (location) { conditions.push('lower_ci(c.location) LIKE ?'); params.push(`%${location.toLowerCase()}%`); }
   if (user_id) { conditions.push('c.assigned_user_id = ?'); params.push(user_id); }
 
   // Regular users see only their own cartridges
-  if (req.user.role !== 'admin') {
+  if (!isStaff(req.user)) {
     conditions.push('c.assigned_user_id = ?');
     params.push(req.user.id);
   }
@@ -61,15 +62,15 @@ router.get('/:id', authenticate, (req, res) => {
   if (!row) return res.status(404).json({ error: 'Картридж не найден' });
 
   // Regular users can only view their own cartridges
-  if (req.user.role !== 'admin' && row.assigned_user_id !== req.user.id) {
+  if (!isStaff(req.user) && row.assigned_user_id !== req.user.id) {
     return res.status(403).json({ error: 'Доступ запрещён' });
   }
 
   res.json(row);
 });
 
-// Create cartridge (admin only)
-router.post('/', authenticate, requireAdmin, (req, res) => {
+// Create cartridge (staff only)
+router.post('/', authenticate, requireStaff, (req, res) => {
   const { name, barcode, type_id, status_id, assigned_user_id, location, notes } = req.body;
   if (!name || !barcode || !type_id || !status_id) {
     return res.status(400).json({ error: 'Заполните обязательные поля' });
@@ -89,8 +90,8 @@ router.post('/', authenticate, requireAdmin, (req, res) => {
   }
 });
 
-// Update cartridge (admin only)
-router.put('/:id', authenticate, requireAdmin, (req, res) => {
+// Update cartridge (staff only)
+router.put('/:id', authenticate, requireStaff, (req, res) => {
   const { name, barcode, type_id, status_id, assigned_user_id, location, notes } = req.body;
   try {
     db.prepare(`
@@ -106,8 +107,8 @@ router.put('/:id', authenticate, requireAdmin, (req, res) => {
   }
 });
 
-// Delete cartridge (admin only)
-router.delete('/:id', authenticate, requireAdmin, (req, res) => {
+// Delete cartridge (staff only)
+router.delete('/:id', authenticate, requireStaff, (req, res) => {
   db.prepare('DELETE FROM cartridge_movements WHERE cartridge_id = ?').run(req.params.id);
   db.prepare('DELETE FROM cartridges WHERE id = ?').run(req.params.id);
   res.json({ ok: true });

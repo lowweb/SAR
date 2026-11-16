@@ -1,23 +1,41 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 import { useReferencesStore } from '../stores/references';
 import { useAuthStore } from '../stores/auth';
 import BarcodeDisplay from '../components/BarcodeDisplay.vue';
 import BarcodeScanner from '../components/BarcodeScanner.vue';
+import { useScrollRestore } from '../composables/useScrollRestore';
 
 const refs = useReferencesStore();
 const auth = useAuthStore();
+const route = useRoute();
+const router = useRouter();
 
 const equipment = ref([]);
 const loading = ref(true);
-const search = ref('');
-const filterType = ref('');
-const filterStatus = ref('');
-const filterLocation = ref('');
-const filterUser = ref('');
-const showFilters = ref(false);
+useScrollRestore(loading);
+
+// Filter state lives in the URL query, so going to a detail page and back (browser or $router.back)
+// restores the same search and filters.
+const search = ref(route.query.search || '');
+const filterType = ref(route.query.type || '');
+const filterStatus = ref(route.query.status || '');
+const filterLocation = ref(route.query.location || '');
+const filterUser = ref(route.query.user || '');
+const showFilters = ref(!!(filterType.value || filterStatus.value || filterLocation.value || filterUser.value));
 let searchTimer = null;
+
+watch([search, filterType, filterStatus, filterLocation, filterUser], () => {
+  const query = {};
+  if (search.value) query.search = search.value;
+  if (filterType.value) query.type = filterType.value;
+  if (filterStatus.value) query.status = filterStatus.value;
+  if (filterLocation.value) query.location = filterLocation.value;
+  if (filterUser.value) query.user = filterUser.value;
+  router.replace({ query }).catch(() => {});
+});
 
 const showAddModal = ref(false);
 const showScanner = ref(false);
@@ -37,7 +55,7 @@ async function load() {
       type_id: filterType.value || undefined,
       status_id: filterStatus.value || undefined,
       location: filterLocation.value || undefined,
-      user_id: auth.isAdmin && filterUser.value ? filterUser.value : undefined
+      user_id: auth.isStaff && filterUser.value ? filterUser.value : undefined
     };
     const { data } = await api.get('/equipment', { params });
     equipment.value = data;
@@ -122,7 +140,7 @@ function resetFilters() {
 
 onMounted(() => {
   load();
-  setTimeout(() => barcodeInput.value?.focus(), 300);
+  setTimeout(() => barcodeInput.value?.focus({ preventScroll: true }), 300);
 });
 </script>
 
@@ -134,7 +152,7 @@ onMounted(() => {
         <button class="btn btn-outline-secondary btn-sm" @click="showFilters = !showFilters">
           <i class="bi bi-funnel"></i> Фильтры
         </button>
-        <button class="btn btn-primary btn-sm" @click="openAddModal">
+        <button v-if="auth.isStaff" class="btn btn-primary btn-sm" @click="openAddModal">
           <i class="bi bi-plus-lg"></i> Добавить
         </button>
       </div>
@@ -192,7 +210,7 @@ onMounted(() => {
           <label class="form-label small fw-medium">Расположение</label>
           <input v-model="filterLocation" @input="load" type="text" class="form-control form-control-sm" placeholder="...">
         </div>
-        <div v-if="auth.isAdmin" class="col-md-2">
+        <div v-if="auth.isStaff" class="col-md-2">
           <label class="form-label small fw-medium">Пользователь</label>
           <select v-model="filterUser" @change="load" class="form-select form-select-sm">
             <option value="">Все</option>
@@ -219,16 +237,17 @@ onMounted(() => {
               <th>Статус</th>
               <th>Владелец</th>
               <th>Расположение</th>
+              <th>Создано</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="8" class="text-center py-5">
+              <td colspan="9" class="text-center py-5">
                 <div class="spinner-border text-primary"></div>
               </td>
             </tr>
             <tr v-else-if="!equipment.length">
-              <td colspan="8" class="text-center py-5 text-muted">Оборудование не найдено</td>
+              <td colspan="9" class="text-center py-5 text-muted">Оборудование не найдено</td>
             </tr>
             <tr v-for="item in equipment" :key="item.id" class="cursor-pointer" style="cursor:pointer"
                 @click="$router.push(`/equipment/${item.id}`)">
@@ -244,6 +263,7 @@ onMounted(() => {
               </td>
               <td>{{ item.assigned_user_name || '—' }}</td>
               <td><small>{{ item.location || '—' }}</small></td>
+              <td class="small">{{ item.created_at ? new Date(item.created_at).toLocaleDateString('ru-RU') : '—' }}</td>
             </tr>
           </tbody>
         </table>
@@ -275,6 +295,7 @@ onMounted(() => {
           <span v-if="item.type_name"><i class="bi bi-tag"></i> {{ item.type_name }}</span>
           <span v-if="item.assigned_user_name"><i class="bi bi-person"></i> {{ item.assigned_user_name }}</span>
           <span v-if="item.location"><i class="bi bi-geo-alt"></i> {{ item.location }}</span>
+          <span v-if="item.created_at"><i class="bi bi-calendar-plus"></i> {{ new Date(item.created_at).toLocaleDateString('ru-RU') }}</span>
         </div>
       </div>
     </div>
@@ -333,7 +354,7 @@ onMounted(() => {
                 <label class="form-label small">Расположение</label>
                 <input v-model="newEquip.location" class="form-control form-control-sm">
               </div>
-              <div v-if="auth.isAdmin" class="col-6">
+              <div v-if="auth.isStaff" class="col-6">
                 <label class="form-label small">Закрепить за</label>
                 <select v-model="newEquip.assigned_user_id" class="form-select form-select-sm">
                   <option value="">Не закреплено</option>

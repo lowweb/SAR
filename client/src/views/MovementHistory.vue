@@ -60,7 +60,7 @@ async function load() {
     await refs.loadAll();
     const params = {
       search: search.value || undefined,
-      user_id: auth.isAdmin && filterUser.value ? filterUser.value : undefined,
+      user_id: auth.isStaff && filterUser.value ? filterUser.value : undefined,
       status_id: filterStatus.value || undefined,
       type_id: filterType.value || undefined,
       date_from: filterDateFrom.value || undefined,
@@ -134,7 +134,7 @@ onMounted(load);
           <label class="form-label small fw-medium">Поиск</label>
           <input v-model="search" @input="load" type="text" class="form-control form-control-sm" placeholder="Оборудование, комментарий...">
         </div>
-        <div v-if="auth.isAdmin" class="col-md-2">
+        <div v-if="auth.isStaff" class="col-md-2">
           <label class="form-label small fw-medium">Пользователь</label>
           <select v-model="filterUser" @change="load" class="form-select form-select-sm">
             <option value="">Все</option>
@@ -181,17 +181,17 @@ onMounted(load);
               <th>Откуда</th>
               <th>Куда</th>
               <th>Комментарий</th>
-              <th v-if="auth.isAdmin">Действия</th>
+              <th v-if="auth.isStaff">Действия</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td :colspan="auth.isAdmin ? 7 : 6" class="text-center py-5">
+              <td :colspan="auth.isStaff ? 7 : 6" class="text-center py-5">
                 <div class="spinner-border text-primary"></div>
               </td>
             </tr>
             <tr v-else-if="!sortedRecords.length">
-              <td :colspan="auth.isAdmin ? 7 : 6" class="text-center text-muted py-5">Записей нет</td>
+              <td :colspan="auth.isStaff ? 7 : 6" class="text-center text-muted py-5">Записей нет</td>
             </tr>
             <tr v-for="r in sortedRecords" :key="r.id">
               <td class="small">{{ new Date(r.moved_at).toLocaleString('ru-RU') }}</td>
@@ -216,7 +216,7 @@ onMounted(load);
                 <div class="text-muted" style="font-size:.75rem">{{ r.to_location || '' }}</div>
               </td>
               <td class="small">{{ r.comment || '—' }}</td>
-              <td v-if="auth.isAdmin" class="small">
+              <td v-if="auth.isStaff" class="small">
                 <button class="btn btn-sm btn-outline-secondary" @click="startEdit(r)">
                   <i class="bi bi-pencil"></i>
                 </button>
@@ -265,7 +265,7 @@ onMounted(load);
         <div v-if="r.comment" class="mt-2 small text-muted border-top pt-2">
           <i class="bi bi-chat-text"></i> {{ r.comment }}
         </div>
-        <div v-if="auth.isAdmin" class="mt-2 d-flex gap-2">
+        <div v-if="auth.isStaff" class="mt-2 d-flex gap-2">
           <button class="btn btn-sm btn-outline-secondary" @click="startEdit(r)">
             <i class="bi bi-pencil"></i>
           </button>

@@ -120,8 +120,8 @@ onMounted(load);
             <td class="fw-medium">{{ u.login }}</td>
             <td>{{ u.full_name }}</td>
             <td>
-              <span class="badge" :class="u.role === 'admin' ? 'bg-danger' : 'bg-info'">
-                {{ u.role === 'admin' ? 'Админ' : 'Пользователь' }}
+              <span class="badge" :class="u.role === 'admin' ? 'bg-danger' : u.role === 'operator' ? 'bg-warning text-dark' : 'bg-info'">
+                {{ u.role === 'admin' ? 'Админ' : u.role === 'operator' ? 'Оператор' : 'Пользователь' }}
               </span>
             </td>
             <td>{{ u.department_name || '—' }}</td>
@@ -167,6 +167,7 @@ onMounted(load);
                 <label class="form-label small">Роль</label>
                 <select v-model="formData.role" class="form-select form-select-sm">
                   <option value="user">Пользователь</option>
+                  <option value="operator">Оператор</option>
                   <option value="admin">Администратор</option>
                 </select>
               </div>

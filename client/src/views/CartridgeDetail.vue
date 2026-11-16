@@ -55,7 +55,7 @@ const isRefill = computed(() => {
 
 const canMove = computed(() => {
   if (!cartridge.value) return false;
-  if (auth.isAdmin) return true;
+  if (auth.isStaff) return true;
   return !isRefill.value;
 });
 
@@ -108,7 +108,7 @@ async function moveCartridge() {
   const refillId = refs.getRefillStatusId();
 
   // User check: only "Отдали на заправку"
-  if (auth.user.role !== 'admin') {
+  if (!auth.isStaff) {
     if (!moveData.value.to_status_id || Number(moveData.value.to_status_id) !== refillId) {
       error.value = 'Вы можете перемещать картриджи только в статус «Отдали на заправку»';
       return;
@@ -148,12 +148,12 @@ onMounted(load);
         {{ cartridge.name }}
       </h1>
       <div class="d-flex gap-2">
-        <button v-if="auth.isAdmin" class="btn btn-outline-primary btn-sm" @click="startEdit"><i class="bi bi-pencil"></i> Редактировать</button>
+        <button v-if="auth.isStaff" class="btn btn-outline-primary btn-sm" @click="startEdit"><i class="bi bi-pencil"></i> Редактировать</button>
         <button v-if="canMove" class="btn btn-warning btn-sm" @click="showMove = true"><i class="bi bi-arrow-left-right"></i> Переместить</button>
-        <span v-if="!canMove && !auth.isAdmin" class="badge bg-warning text-dark py-2">
+        <span v-if="!canMove && !auth.isStaff" class="badge bg-warning text-dark py-2">
           <i class="bi bi-lock"></i> На заправке — перемещение только администратором
         </span>
-        <button v-if="auth.isAdmin" class="btn btn-danger btn-sm" @click="deleteCartridge"><i class="bi bi-trash"></i> Удалить</button>
+        <button v-if="auth.isStaff" class="btn btn-danger btn-sm" @click="deleteCartridge"><i class="bi bi-trash"></i> Удалить</button>
       </div>
     </div>
 
@@ -290,7 +290,7 @@ onMounted(load);
           <div class="modal-body">
             <div v-if="error" class="alert alert-danger small py-2">{{ error }}</div>
             <div class="g-2 d-flex flex-column gap-2">
-              <div v-if="auth.isAdmin">
+              <div v-if="auth.isStaff">
                 <label class="form-label small">Новый пользователь</label>
                 <select v-model="moveData.to_user_id" class="form-select form-select-sm">
                   <option :value="''">Без изменений</option>
@@ -301,13 +301,13 @@ onMounted(load);
                 <label class="form-label small">Новый статус</label>
                 <select v-model="moveData.to_status_id" class="form-select form-select-sm">
                   <option :value="''">Без изменений</option>
-                  <option v-if="auth.user.role !== 'admin'" :value="refs.getRefillStatusId()">Отдали на заправку</option>
-                  <template v-if="auth.isAdmin">
+                  <option v-if="!auth.isStaff" :value="refs.getRefillStatusId()">Отдали на заправку</option>
+                  <template v-if="auth.isStaff">
                     <option v-for="s in refs.cartridgeStatuses" :key="s.id" :value="s.id">{{ s.name }}</option>
                   </template>
                 </select>
               </div>
-              <div v-if="auth.isAdmin">
+              <div v-if="auth.isStaff">
                 <label class="form-label small">Новое расположение</label>
                 <input v-model="moveData.to_location" class="form-control form-control-sm" :placeholder="cartridge.location || '—'">
               </div>

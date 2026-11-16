@@ -12,8 +12,6 @@ const form = ref({
   notify_on_assign: true,
   notify_on_unassign: true,
   notify_on_status: true,
-  notify_on_create: true,
-  notify_on_delete: true,
   smtp_host: '',
   smtp_port: 465,
   smtp_secure: 'ssl',
@@ -27,27 +25,21 @@ const testTo = ref('');
 const testing = ref(false);
 const testResult = ref(null); // { ok: bool, text }
 
-function applyServerState(data) {
-  form.value.notify_enabled = Boolean(data.enabled);
-  form.value.notify_on_assign = data.onAssign !== false;
-  form.value.notify_on_unassign = data.onUnassign !== false;
-  form.value.notify_on_status = data.onStatus !== false;
-  form.value.notify_on_create = data.onCreate !== false;
-  form.value.notify_on_delete = data.onDelete !== false;
-  form.value.smtp_host = data.smtp_host || '';
-  form.value.smtp_port = data.smtp_port || 465;
-  form.value.smtp_secure = data.smtp_secure || 'ssl';
-  form.value.smtp_user = data.smtp_user || '';
-  form.value.notify_from = data.notify_from || '';
-  passSet.value = Boolean(data.smtp_pass_set);
-}
-
 async function load() {
   loading.value = true;
   error.value = '';
   try {
     const { data } = await api.get('/settings/notifications');
-    applyServerState(data);
+    form.value.notify_enabled = data.enabled;
+    form.value.notify_on_assign = data.onAssign;
+    form.value.notify_on_unassign = data.onUnassign;
+    form.value.notify_on_status = data.onStatus;
+    form.value.smtp_host = data.smtp_host;
+    form.value.smtp_port = data.smtp_port;
+    form.value.smtp_secure = data.smtp_secure;
+    form.value.smtp_user = data.smtp_user;
+    form.value.notify_from = data.notify_from;
+    passSet.value = data.smtp_pass_set;
   } catch (e) {
     error.value = e.response?.data?.error || 'Ошибка загрузки настроек';
   } finally {
@@ -65,8 +57,6 @@ async function save() {
       notify_on_assign: form.value.notify_on_assign,
       notify_on_unassign: form.value.notify_on_unassign,
       notify_on_status: form.value.notify_on_status,
-      notify_on_create: form.value.notify_on_create,
-      notify_on_delete: form.value.notify_on_delete,
       smtp_host: form.value.smtp_host,
       smtp_port: form.value.smtp_port,
       smtp_secure: form.value.smtp_secure,
@@ -75,9 +65,7 @@ async function save() {
     };
     if (form.value.smtp_pass) payload.smtp_pass = form.value.smtp_pass;
     const { data } = await api.put('/settings/notifications', payload);
-    // Применяем актуальные значения из ответа сервера, чтобы тумблеры
-    // отражали реально сохранённое состояние (без перезагрузки страницы)
-    applyServerState(data);
+    passSet.value = data.smtp_pass_set;
     form.value.smtp_pass = '';
     success.value = 'Настройки сохранены';
   } catch (e) {
@@ -149,18 +137,6 @@ onMounted(load);
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="notifyStatus" v-model="form.notify_on_status" :disabled="!form.notify_enabled">
                     <label class="form-check-label small" for="notifyStatus">Смена статуса в рамках сотрудника</label>
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="notifyCreate" v-model="form.notify_on_create" :disabled="!form.notify_enabled">
-                    <label class="form-check-label small" for="notifyCreate">Создание новой карточки</label>
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="notifyDelete" v-model="form.notify_on_delete" :disabled="!form.notify_enabled">
-                    <label class="form-check-label small" for="notifyDelete">Удаление карточки</label>
                   </div>
                 </div>
               </div>

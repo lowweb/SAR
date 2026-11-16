@@ -78,6 +78,12 @@ const routes = [
   }
 ];
 
+// Scroll restoration is handled per list page (composables/useScrollRestore.js),
+// because the content loads asynchronously and the browser would restore too early.
+if ('scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual';
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes

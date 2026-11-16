@@ -16,6 +16,20 @@ function authenticate(req, res, next) {
   }
 }
 
+// Роли:
+//  user     — видит только свои остатки, может сдать свой картридж на заправку
+//  operator — видит все остатки и выполняет любые перемещения/правки, как администратор,
+//             но не имеет доступа к блоку администрирования
+//  admin    — всё
+const ROLES = ['user', 'operator', 'admin'];
+const STAFF_ROLES = ['operator', 'admin'];
+
+// Работа с остатками (видеть все, перемещать, редактировать)
+function isStaff(user) {
+  return STAFF_ROLES.includes(user?.role);
+}
+
+// Блок администрирования (пользователи, справочники, настройки уведомлений)
 function requireAdmin(req, res, next) {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Требуется роль администратора' });
@@ -23,4 +37,12 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { authenticate, requireAdmin, JWT_SECRET };
+// Любые действия с остатками: администратор или оператор
+function requireStaff(req, res, next) {
+  if (!isStaff(req.user)) {
+    return res.status(403).json({ error: 'Требуется роль оператора или администратора' });
+  }
+  next();
+}
+
+module.exports = { authenticate, requireAdmin, requireStaff, isStaff, ROLES, JWT_SECRET };

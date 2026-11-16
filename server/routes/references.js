@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { db } = require('../db');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, ROLES } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -133,6 +133,7 @@ router.post('/users', authenticate, requireAdmin, (req, res) => {
   if (!login || !password || !full_name) {
     return res.status(400).json({ error: 'Заполните обязательные поля: логин, пароль, ФИО' });
   }
+  if (role && !ROLES.includes(role)) return res.status(400).json({ error: 'Недопустимая роль' });
   const existing = db.prepare('SELECT id FROM users WHERE login = ?').get(login);
   if (existing) return res.status(400).json({ error: 'Логин уже существует' });
 
@@ -147,6 +148,7 @@ router.put('/users/:id', authenticate, requireAdmin, (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Пользователь не найден' });
 
   const { login, password, full_name, role, department_id, email } = req.body;
+  if (role && !ROLES.includes(role)) return res.status(400).json({ error: 'Недопустимая роль' });
 
   if (login && login !== existing.login) {
     const dup = db.prepare('SELECT id FROM users WHERE login = ? AND id != ?').get(login, req.params.id);

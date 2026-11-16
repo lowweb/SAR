@@ -1,7 +1,6 @@
 const express = require('express');
 const { db } = require('../db');
-const { authenticate, requireAdmin } = require('../middleware/auth');
-const { notifyEquipmentCreated, notifyEquipmentDeleted } = require('../notify');
+const { authenticate, requireStaff, isStaff } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -18,7 +17,7 @@ router.get('/', authenticate, (req, res) => {
   `;
   const params = [];
 
-  if (req.user.role !== 'admin') {
+  if (!isStaff(req.user)) {
     sql += ' AND e.assigned_user_id = ?';
     params.push(req.user.id);
   } else if (user_id) {
@@ -27,13 +26,13 @@ router.get('/', authenticate, (req, res) => {
   }
 
   if (search) {
-    sql += ' AND (e.name LIKE ? OR e.barcode LIKE ? OR e.serial_number LIKE ? OR e.inventory_number LIKE ?)';
-    const s = `%${search}%`;
+    sql += ' AND (lower_ci(e.name) LIKE ? OR lower_ci(e.barcode) LIKE ? OR lower_ci(e.serial_number) LIKE ? OR lower_ci(e.inventory_number) LIKE ?)';
+    const s = `%${search.toLowerCase()}%`;
     params.push(s, s, s, s);
   }
   if (type_id) { sql += ' AND e.type_id = ?'; params.push(type_id); }
   if (status_id) { sql += ' AND e.status_id = ?'; params.push(status_id); }
-  if (location) { sql += ' AND e.location LIKE ?'; params.push(`%${location}%`); }
+  if (location) { sql += ' AND lower_ci(e.location) LIKE ?'; params.push(`%${location.toLowerCase()}%`); }
 
   sql += ' ORDER BY e.id DESC';
 
@@ -53,14 +52,14 @@ router.get('/:id', authenticate, (req, res) => {
   `).get(req.params.id);
 
   if (!item) return res.status(404).json({ error: 'Оборудование не найдено' });
-  if (req.user.role !== 'admin' && item.assigned_user_id !== req.user.id) {
+  if (!isStaff(req.user) && item.assigned_user_id !== req.user.id) {
     return res.status(403).json({ error: 'Доступ запрещён' });
   }
 
   res.json(item);
 });
 
-router.post('/', authenticate, (req, res) => {
+router.post('/', authenticate, requireStaff, (req, res) => {
   const { name, serial_number, inventory_number, barcode, type_id, status_id, assigned_user_id, location, notes } = req.body;
 
   if (!name || !barcode || !type_id || !status_id) {
@@ -70,7 +69,7 @@ router.post('/', authenticate, (req, res) => {
   const existing = db.prepare('SELECT id FROM equipment WHERE barcode = ?').get(barcode);
   if (existing) return res.status(400).json({ error: 'Оборудование с таким штрих-кодом уже существует' });
 
-  const finalUserId = req.user.role === 'admin' ? (assigned_user_id || null) : req.user.id;
+  const finalUserId = isStaff(req.user) ? (assigned_user_id || null) : req.user.id;
 
   const result = db.prepare(`
     INSERT INTO equipment (name, serial_number, inventory_number, barcode, type_id, status_id, assigned_user_id, location, notes)
@@ -84,22 +83,10 @@ router.post('/', authenticate, (req, res) => {
   `).run(result.lastInsertRowid, finalUserId, status_id, location || null, req.user.id);
 
   const item = db.prepare('SELECT * FROM equipment WHERE id = ?').get(result.lastInsertRowid);
-
-  notifyEquipmentCreated({
-    itemName: item.name,
-    barcode: item.barcode,
-    inventoryNumber: item.inventory_number,
-    statusId: item.status_id,
-    typeId: item.type_id,
-    location: item.location,
-    assignedUserId: item.assigned_user_id,
-    creatorId: req.user.id
-  });
-
   res.status(201).json(item);
 });
 
-router.put('/:id', authenticate, requireAdmin, (req, res) => {
+router.put('/:id', authenticate, requireStaff, (req, res) => {
   const { name, serial_number, inventory_number, barcode, type_id, status_id, assigned_user_id, location, notes } = req.body;
   const existing = db.prepare('SELECT * FROM equipment WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Оборудование не найдено' });
@@ -128,22 +115,12 @@ router.put('/:id', authenticate, requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
-router.delete('/:id', authenticate, requireAdmin, (req, res) => {
+router.delete('/:id', authenticate, requireStaff, (req, res) => {
   const existing = db.prepare('SELECT * FROM equipment WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Оборудование не найдено' });
 
   db.prepare('DELETE FROM movement_history WHERE equipment_id = ?').run(req.params.id);
   db.prepare('DELETE FROM equipment WHERE id = ?').run(req.params.id);
-
-  notifyEquipmentDeleted({
-    itemName: existing.name,
-    barcode: existing.barcode,
-    inventoryNumber: existing.inventory_number,
-    statusId: existing.status_id,
-    assignedUserId: existing.assigned_user_id,
-    deletedById: req.user.id
-  });
-
   res.json({ success: true });
 });
 

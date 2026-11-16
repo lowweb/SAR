@@ -1,23 +1,38 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 import { useReferencesStore } from '../stores/references';
 import { useAuthStore } from '../stores/auth';
 import BarcodeDisplay from '../components/BarcodeDisplay.vue';
 import BarcodeScanner from '../components/BarcodeScanner.vue';
+import { useScrollRestore } from '../composables/useScrollRestore';
 
 const refs = useReferencesStore();
 const auth = useAuthStore();
+const route = useRoute();
+const router = useRouter();
 
 const cartridges = ref([]);
 const allCartridges = ref([]); // full list for batch barcode lookup
 const loading = ref(true);
-const search = ref('');
+useScrollRestore(loading);
 const batchScanValue = ref('');
-const filterStatus = ref('');
-const filterUser = ref('');
-const showFilters = ref(false);
+
+// Filter state lives in the URL query so it survives visiting a detail page and going back.
+const search = ref(route.query.search || '');
+const filterStatus = ref(route.query.status || '');
+const filterUser = ref(route.query.user || '');
+const showFilters = ref(!!(filterStatus.value || filterUser.value));
 let searchTimer = null;
+
+watch([search, filterStatus, filterUser], () => {
+  const query = {};
+  if (search.value) query.search = search.value;
+  if (filterStatus.value) query.status = filterStatus.value;
+  if (filterUser.value) query.user = filterUser.value;
+  router.replace({ query }).catch(() => {});
+});
 const showAddModal = ref(false);
 const showScanner = ref(false);
 const showAddScanner = ref(false);
@@ -66,7 +81,7 @@ function clearSelection() {
 }
 
 function canSelectForBatch(c) {
-  if (auth.isAdmin) return true;
+  if (auth.isStaff) return true;
   return c.assigned_user_id === auth.user?.id && c.status_id !== refillStatusId.value;
 }
 
@@ -180,7 +195,7 @@ async function addCartridge() {
 function startBatch() {
   batchMode.value = true;
   selectedIds.value = [];
-  batchStatusId.value = auth.isAdmin ? '' : refillStatusId.value;
+  batchStatusId.value = auth.isStaff ? '' : refillStatusId.value;
   batchError.value = '';
   batchSuccess.value = '';
   lastScanResult.value = '';
@@ -217,7 +232,7 @@ async function applyBatch() {
     });
     batchSuccess.value = `Статус изменён для ${data.count} картриджей`;
     selectedIds.value = [];
-    batchStatusId.value = auth.isAdmin ? '' : refillStatusId.value;
+    batchStatusId.value = auth.isStaff ? '' : refillStatusId.value;
     lastScanResult.value = '';
     await load();
   } catch (e) {
@@ -230,7 +245,7 @@ function resetFilters() {
   load();
 }
 
-onMounted(() => { load(); setTimeout(() => barcodeInput.value?.focus(), 300); });
+onMounted(() => { load(); setTimeout(() => barcodeInput.value?.focus({ preventScroll: true }), 300); });
 </script>
 
 <template>
@@ -241,7 +256,7 @@ onMounted(() => { load(); setTimeout(() => barcodeInput.value?.focus(), 300); })
         <button v-if="!batchMode" class="btn btn-outline-secondary btn-sm" @click="showFilters = !showFilters">
           <i class="bi bi-funnel"></i> Фильтры
         </button>
-        <button v-if="!batchMode && auth.isAdmin" class="btn btn-primary btn-sm" @click="openAddModal">
+        <button v-if="!batchMode && auth.isStaff" class="btn btn-primary btn-sm" @click="openAddModal">
           <i class="bi bi-plus-lg"></i> Добавить
         </button>
         <button v-if="!batchMode" class="btn btn-warning btn-sm" @click="startBatch">
@@ -327,9 +342,9 @@ onMounted(() => { load(); setTimeout(() => barcodeInput.value?.focus(), 300); })
           <div class="col-12">
             <label class="form-label small">Новый статус</label>
             <select v-model="batchStatusId" class="form-select form-select-sm">
-              <option v-if="auth.isAdmin" value="">Выберите статус</option>
-              <option v-if="!auth.isAdmin" :value="refillStatusId">Отдали на заправку</option>
-              <template v-if="auth.isAdmin">
+              <option v-if="auth.isStaff" value="">Выберите статус</option>
+              <option v-if="!auth.isStaff" :value="refillStatusId">Отдали на заправку</option>
+              <template v-if="auth.isStaff">
                 <option v-for="s in refs.cartridgeStatuses" :key="s.id" :value="s.id">{{ s.name }}</option>
               </template>
             </select>

@@ -1,6 +1,6 @@
 const express = require('express');
 const { db } = require('../db');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireStaff, isStaff } = require('../middleware/auth');
 const { notifyEquipmentMovement } = require('../notify');
 
 const router = express.Router();
@@ -22,7 +22,7 @@ router.get('/', authenticate, (req, res) => {
   `;
   const params = [];
 
-  if (req.user.role !== 'admin') {
+  if (!isStaff(req.user)) {
     sql += ' AND (e.assigned_user_id = ? OR mh.from_user_id = ? OR mh.to_user_id = ?)';
     params.push(req.user.id, req.user.id, req.user.id);
   } else if (user_id) {
@@ -32,8 +32,8 @@ router.get('/', authenticate, (req, res) => {
 
   if (equipment_id) { sql += ' AND mh.equipment_id = ?'; params.push(equipment_id); }
   if (search) {
-    sql += ' AND (e.name LIKE ? OR e.barcode LIKE ? OR mh.comment LIKE ?)';
-    const s = `%${search}%`;
+    sql += ' AND (lower_ci(e.name) LIKE ? OR lower_ci(e.barcode) LIKE ? OR lower_ci(mh.comment) LIKE ?)';
+    const s = `%${search.toLowerCase()}%`;
     params.push(s, s, s);
   }
   if (date_from) { sql += ' AND mh.moved_at >= ?'; params.push(date_from); }
@@ -46,7 +46,7 @@ router.get('/', authenticate, (req, res) => {
   res.json(items);
 });
 
-router.post('/move', authenticate, requireAdmin, (req, res) => {
+router.post('/move', authenticate, requireStaff, (req, res) => {
   const { equipment_id, to_user_id, to_status_id, to_location, comment } = req.body;
 
   if (!equipment_id) return res.status(400).json({ error: 'Укажите оборудование' });
@@ -96,7 +96,7 @@ router.post('/move', authenticate, requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
-router.put('/:id', authenticate, requireAdmin, (req, res) => {
+router.put('/:id', authenticate, requireStaff, (req, res) => {
   const existing = db.prepare('SELECT * FROM movement_history WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Запись не найдена' });
 
@@ -122,7 +122,7 @@ router.put('/:id', authenticate, requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
-router.delete('/:id', authenticate, requireAdmin, (req, res) => {
+router.delete('/:id', authenticate, requireStaff, (req, res) => {
   const existing = db.prepare('SELECT * FROM movement_history WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Запись не найдена' });
 

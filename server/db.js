@@ -2,10 +2,16 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 
-const db = new Database(process.env.SAR_DB_PATH || path.join(__dirname, 'sar.db'));
+const db = new Database(path.join(__dirname, 'sar.db'));
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+
+// SQLite LOWER()/LIKE handle only ASCII case, so Cyrillic search ("монитор" vs "Монитор")
+// fails. This function lowercases any Unicode text; use it on both sides of LIKE.
+db.function('lower_ci', { deterministic: true }, (value) =>
+  value == null ? null : String(value).toLowerCase()
+);
 
 function initialize() {
   db.exec(`
@@ -32,7 +38,7 @@ function initialize() {
       login TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       full_name TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'admin')),
+      role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'operator', 'admin')),
       department_id INTEGER,
       email TEXT,
       created_at TEXT DEFAULT (datetime('now')),
@@ -120,6 +126,7 @@ function initialize() {
   `);
 
   migrateStatusScopes();
+  migrateUserRoles();
 
   const userCount = db.prepare('SELECT COUNT(*) as cnt FROM users').get().cnt;
   if (userCount === 0) {
@@ -153,6 +160,35 @@ function initialize() {
     });
     backfill();
   }
+}
+
+// Роль 'operator': CHECK-ограничение на колонку role нельзя изменить через ALTER,
+// поэтому пересоздаём таблицу users (как и при миграции статусов).
+function migrateUserRoles() {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get();
+  if (!row || row.sql.includes("'operator'")) return;
+  db.pragma('foreign_keys = OFF');
+  const migrate = db.transaction(() => {
+    db.exec(`
+      CREATE TABLE users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        login TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'operator', 'admin')),
+        department_id INTEGER,
+        email TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (department_id) REFERENCES departments(id)
+      );
+      INSERT INTO users_new (id, login, password_hash, full_name, role, department_id, email, created_at)
+        SELECT id, login, password_hash, full_name, role, department_id, email, created_at FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+    `);
+  });
+  migrate();
+  db.pragma('foreign_keys = ON');
 }
 
 // Разделение справочника статусов: добавляем scope и выносим статусы,
